@@ -27,7 +27,7 @@ import { SortableTaskCard } from './SortableTaskCard';
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
 import { pluralize } from '../../shared/utils/pluralize';
 import { cn } from '../lib/utils';
-import { persistTaskStatus } from '../stores/task-store';
+import { persistTaskStatus, archiveTasks } from '../stores/task-store';
 import { useGlossary } from '../contexts/GlossaryContext';
 import type { Task, TaskStatus } from '../../shared/types';
 
@@ -43,6 +43,7 @@ interface DroppableColumnProps {
   onTaskClick: (task: Task) => void;
   isOver: boolean;
   onAddClick?: () => void;
+  onArchiveAll?: () => void;
   taskTermSingular: string;  // Glossary term for "task" (e.g., "Story" or "Subtask")
 }
 
@@ -87,7 +88,7 @@ const getEmptyStateContent = (status: TaskStatus): { icon: React.ReactNode; mess
   }
 };
 
-function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick, taskTermSingular }: DroppableColumnProps) {
+function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick, onArchiveAll, taskTermSingular }: DroppableColumnProps) {
   const { setNodeRef } = useDroppable({
     id: status
   });
@@ -134,16 +135,29 @@ function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick, taskT
             {tasks.length}
           </span>
         </div>
-        {status === 'backlog' && onAddClick && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-colors"
-            onClick={onAddClick}
-          >
-            <Plus className="h-4 w-4" />
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {status === 'backlog' && onAddClick && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-primary/10 hover:text-primary transition-colors"
+              onClick={onAddClick}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          )}
+          {status === 'done' && onArchiveAll && tasks.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 hover:bg-muted-foreground/10 hover:text-muted-foreground transition-colors"
+              onClick={onArchiveAll}
+              title="Archive all done tasks"
+            >
+              <Archive className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Task list */}
@@ -246,6 +260,20 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick }: KanbanBoardP
 
     return grouped;
   }, [filteredTasks]);
+
+  const handleArchiveAll = async () => {
+    // Get projectId from the first task (all tasks should have the same projectId)
+    const projectId = tasks[0]?.projectId;
+    if (!projectId) {
+      console.error('No projectId found');
+      return;
+    }
+
+    const doneTaskIds = tasksByStatus.done.map((t) => t.id);
+    if (doneTaskIds.length === 0) return;
+
+    await archiveTasks(projectId, doneTaskIds);
+  };
 
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
@@ -353,6 +381,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick }: KanbanBoardP
               onTaskClick={onTaskClick}
               isOver={overColumnId === status}
               onAddClick={status === 'backlog' ? onNewTaskClick : undefined}
+              onArchiveAll={status === 'done' ? handleArchiveAll : undefined}
               taskTermSingular={glossary.task}
             />
           ))}

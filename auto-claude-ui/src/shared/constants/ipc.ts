@@ -94,6 +94,11 @@ export const IPC_CHANNELS = {
   // Retry a rate-limited operation with a different profile
   CLAUDE_RETRY_WITH_PROFILE: 'claude:retryWithProfile',
 
+  // Usage monitoring (proactive account switching)
+  USAGE_UPDATED: 'claude:usageUpdated',  // Event: usage data updated (main -> renderer)
+  USAGE_REQUEST: 'claude:usageRequest',  // Request current usage snapshot
+  PROACTIVE_SWAP_NOTIFICATION: 'claude:proactiveSwapNotification',  // Event: proactive swap occurred
+
   // Settings
   SETTINGS_GET: 'settings:get',
   SETTINGS_SAVE: 'settings:save',
@@ -217,6 +222,7 @@ export const IPC_CHANNELS = {
   CHANGELOG_SAVE: 'changelog:save',
   CHANGELOG_READ_EXISTING: 'changelog:readExisting',
   CHANGELOG_SUGGEST_VERSION: 'changelog:suggestVersion',
+  CHANGELOG_SUGGEST_VERSION_FROM_COMMITS: 'changelog:suggestVersionFromCommits',
 
   // Changelog git operations (for git-based changelog generation)
   CHANGELOG_GET_BRANCHES: 'changelog:getBranches',
@@ -246,5 +252,10 @@ export const IPC_CHANNELS = {
   INSIGHTS_ERROR: 'insights:error',
 
   // File explorer operations
-  FILE_EXPLORER_LIST: 'fileExplorer:list'
+  FILE_EXPLORER_LIST: 'fileExplorer:list',
+
+  // Git operations
+  GIT_GET_BRANCHES: 'git:getBranches',
+  GIT_GET_CURRENT_BRANCH: 'git:getCurrentBranch',
+  GIT_DETECT_MAIN_BRANCH: 'git:detectMainBranch'
 } as const;

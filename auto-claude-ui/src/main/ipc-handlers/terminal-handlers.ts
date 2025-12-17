@@ -1,8 +1,9 @@
 import { ipcMain } from 'electron';
 import type { BrowserWindow } from 'electron';
 import { IPC_CHANNELS } from '../../shared/constants';
-import type { IPCResult, TerminalCreateOptions, ClaudeProfile, ClaudeProfileSettings } from '../../shared/types';
+import type { IPCResult, TerminalCreateOptions, ClaudeProfile, ClaudeProfileSettings, ClaudeUsageSnapshot } from '../../shared/types';
 import { getClaudeProfileManager } from '../claude-profile-manager';
+import { getUsageMonitor } from '../claude-profile/usage-monitor';
 import { TerminalManager } from '../terminal-manager';
 import { projectStore } from '../project-store';
 import { terminalNameGenerator } from '../terminal-name-generator';
@@ -316,6 +317,12 @@ export function registerTerminalHandlers(
       try {
         const profileManager = getClaudeProfileManager();
         profileManager.updateAutoSwitchSettings(settings);
+
+        // Restart usage monitor with new settings
+        const monitor = getUsageMonitor();
+        monitor.stop();
+        monitor.start();
+
         return { success: true };
       } catch (error) {
         return {
@@ -407,6 +414,28 @@ export function registerTerminalHandlers(
       }
     }
   );
+
+  // ============================================
+  // Usage Monitoring (Proactive Account Switching)
+  // ============================================
+
+  // Request current usage snapshot
+  ipcMain.handle(
+    IPC_CHANNELS.USAGE_REQUEST,
+    async (): Promise<IPCResult<import('../../shared/types').ClaudeUsageSnapshot | null>> => {
+      try {
+        const monitor = getUsageMonitor();
+        const usage = monitor.getCurrentUsage();
+        return { success: true, data: usage };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to get current usage'
+        };
+      }
+    }
+  );
+
 
   // Terminal session management (persistence/restore)
   ipcMain.handle(
@@ -521,4 +550,24 @@ export function registerTerminalHandlers(
       }
     }
   );
+}
+
+/**
+ * Initialize usage monitor event forwarding to renderer process
+ * Call this after mainWindow is created
+ */
+export function initializeUsageMonitorForwarding(mainWindow: BrowserWindow): void {
+  const monitor = getUsageMonitor();
+
+  // Forward usage updates to renderer
+  monitor.on('usage-updated', (usage: ClaudeUsageSnapshot) => {
+    mainWindow.webContents.send(IPC_CHANNELS.USAGE_UPDATED, usage);
+  });
+
+  // Forward proactive swap notifications to renderer
+  monitor.on('show-swap-notification', (notification: unknown) => {
+    mainWindow.webContents.send(IPC_CHANNELS.PROACTIVE_SWAP_NOTIFICATION, notification);
+  });
+
+  console.log('[terminal-handlers] Usage monitor event forwarding initialized');
 }

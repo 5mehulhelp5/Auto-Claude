@@ -23,6 +23,16 @@ export class AgentManager extends EventEmitter {
   private events: AgentEvents;
   private processManager: AgentProcessManager;
   private queueManager: AgentQueueManager;
+  private taskExecutionContext: Map<string, {
+    projectPath: string;
+    specId: string;
+    options: TaskExecutionOptions;
+    isSpecCreation?: boolean;
+    taskDescription?: string;
+    specDir?: string;
+    metadata?: SpecCreationMetadata;
+    swapCount: number;
+  }> = new Map();
 
   constructor() {
     super();
@@ -32,6 +42,40 @@ export class AgentManager extends EventEmitter {
     this.events = new AgentEvents();
     this.processManager = new AgentProcessManager(this.state, this.events, this);
     this.queueManager = new AgentQueueManager(this.state, this.events, this.processManager, this);
+
+    // Listen for auto-swap restart events
+    this.on('auto-swap-restart-task', (taskId: string, newProfileId: string) => {
+      console.log('[AgentManager] Auto-swap restart:', taskId, newProfileId);
+      this.restartTask(taskId);
+    });
+
+    // Listen for task completion to clean up context (prevent memory leak)
+    this.on('exit', (taskId: string, code: number | null) => {
+      // Clean up context when:
+      // 1. Task completed successfully (code === 0), or
+      // 2. Task failed and won't be restarted (handled by auto-swap logic)
+
+      // Note: Auto-swap restart happens BEFORE this exit event is processed,
+      // so we need a small delay to allow restart to preserve context
+      setTimeout(() => {
+        const context = this.taskExecutionContext.get(taskId);
+        if (!context) return; // Already cleaned up or restarted
+
+        // If task completed successfully, always clean up
+        if (code === 0) {
+          this.taskExecutionContext.delete(taskId);
+          console.log('[AgentManager] Cleaned up context for completed task:', taskId);
+          return;
+        }
+
+        // If task failed and hit max retries, clean up
+        if (context.swapCount >= 2) {
+          this.taskExecutionContext.delete(taskId);
+          console.log('[AgentManager] Cleaned up context for max-retry task:', taskId);
+        }
+        // Otherwise keep context for potential restart
+      }, 1000); // Delay to allow restart logic to run first
+    });
   }
 
   /**
@@ -88,6 +132,9 @@ export class AgentManager extends EventEmitter {
       args.push('--auto-approve');
     }
 
+    // Store context for potential restart
+    this.storeTaskContext(taskId, projectPath, '', {}, true, taskDescription, specDir, metadata);
+
     console.log('[AgentManager] Spawning spec_runner with args:', args);
     // Note: This is spec-creation but it chains to task-execution via run.py
     this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
@@ -132,8 +179,16 @@ export class AgentManager extends EventEmitter {
     // Force: When user starts a task from the UI, that IS their approval
     args.push('--force');
 
+    // Pass base branch if specified (ensures worktrees are created from the correct branch)
+    if (options.baseBranch) {
+      args.push('--base-branch', options.baseBranch);
+    }
+
     // Note: --parallel was removed from run.py CLI - parallel execution is handled internally by the agent
     // The options.parallel and options.workers are kept for future use or logging purposes
+
+    // Store context for potential restart
+    this.storeTaskContext(taskId, projectPath, specId, options, false);
 
     console.log('[AgentManager] Spawning process with args:', args);
     this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
@@ -233,5 +288,79 @@ export class AgentManager extends EventEmitter {
    */
   getRunningTasks(): string[] {
     return this.state.getRunningTaskIds();
+  }
+
+  /**
+   * Store task execution context for potential restarts
+   */
+  private storeTaskContext(
+    taskId: string,
+    projectPath: string,
+    specId: string,
+    options: TaskExecutionOptions,
+    isSpecCreation?: boolean,
+    taskDescription?: string,
+    specDir?: string,
+    metadata?: SpecCreationMetadata
+  ): void {
+    // Preserve swapCount if context already exists (for restarts)
+    const existingContext = this.taskExecutionContext.get(taskId);
+    const swapCount = existingContext?.swapCount ?? 0;
+
+    this.taskExecutionContext.set(taskId, {
+      projectPath,
+      specId,
+      options,
+      isSpecCreation,
+      taskDescription,
+      specDir,
+      metadata,
+      swapCount // Preserve existing count instead of resetting
+    });
+  }
+
+  /**
+   * Restart task after profile swap
+   */
+  restartTask(taskId: string): boolean {
+    const context = this.taskExecutionContext.get(taskId);
+    if (!context) {
+      console.error('[AgentManager] No context for task:', taskId);
+      return false;
+    }
+
+    // Prevent infinite swap loops
+    if (context.swapCount >= 2) {
+      console.error('[AgentManager] Max swap count reached for task:', taskId);
+      return false;
+    }
+
+    context.swapCount++;
+    console.log('[AgentManager] Restarting task:', taskId, 'swap count:', context.swapCount);
+
+    // Kill current process
+    this.killTask(taskId);
+
+    // Wait for cleanup, then restart
+    setTimeout(() => {
+      if (context.isSpecCreation) {
+        this.startSpecCreation(
+          taskId,
+          context.projectPath,
+          context.taskDescription!,
+          context.specDir,
+          context.metadata
+        );
+      } else {
+        this.startTaskExecution(
+          taskId,
+          context.projectPath,
+          context.specId,
+          context.options
+        );
+      }
+    }, 500);
+
+    return true;
   }
 }

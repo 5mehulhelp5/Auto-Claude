@@ -5,6 +5,8 @@ import { setupIpcHandlers } from './ipc-setup';
 import { AgentManager } from './agent';
 import { TerminalManager } from './terminal-manager';
 import { pythonEnvManager } from './python-env-manager';
+import { getUsageMonitor } from './claude-profile/usage-monitor';
+import { initializeUsageMonitorForwarding } from './ipc-handlers/terminal-handlers';
 
 // Get icon path based on platform
 function getIconPath(): string {
@@ -49,7 +51,8 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      backgroundThrottling: false // Prevent terminal lag when window loses focus
     }
   });
 
@@ -125,6 +128,17 @@ app.whenReady().then(() => {
   // Create window
   createWindow();
 
+  // Initialize usage monitoring after window is created
+  if (mainWindow) {
+    // Setup event forwarding from usage monitor to renderer
+    initializeUsageMonitorForwarding(mainWindow);
+
+    // Start the usage monitor
+    const usageMonitor = getUsageMonitor();
+    usageMonitor.start();
+    console.log('[main] Usage monitor initialized and started');
+  }
+
   // macOS: re-create window when dock icon is clicked
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -142,6 +156,11 @@ app.on('window-all-closed', () => {
 
 // Cleanup before quit
 app.on('before-quit', async () => {
+  // Stop usage monitor
+  const usageMonitor = getUsageMonitor();
+  usageMonitor.stop();
+  console.log('[main] Usage monitor stopped');
+
   // Kill all running agent processes
   if (agentManager) {
     await agentManager.killAll();

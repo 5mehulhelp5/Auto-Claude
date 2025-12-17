@@ -80,10 +80,11 @@ from core.workspace.display import (
     show_build_summary,
 )
 from core.workspace.git_utils import (
-    get_changed_files_from_branch as _get_changed_files_from_branch,
+    _is_auto_claude_file,
+    get_existing_build_worktree,
 )
 from core.workspace.git_utils import (
-    get_existing_build_worktree,
+    get_changed_files_from_branch as _get_changed_files_from_branch,
 )
 from core.workspace.git_utils import (
     get_file_content_from_ref as _get_file_content_from_ref,
@@ -519,15 +520,15 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
         spec_commit = spec_commit_result.stdout.strip()
 
         # Use git merge-tree to check for conflicts WITHOUT touching working directory
+        # Note: --write-tree mode only accepts 2 branches (it auto-finds the merge base)
         merge_tree_result = subprocess.run(
             [
                 "git",
                 "merge-tree",
                 "--write-tree",
                 "--no-messages",
-                merge_base,
-                main_commit,
-                spec_commit,
+                result["base_branch"],  # Use branch names, not commit hashes
+                spec_branch,
             ],
             cwd=project_dir,
             capture_output=True,
@@ -548,7 +549,12 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
                     )
                     if match:
                         file_path = match.group(1).strip()
-                        if file_path and file_path not in result["conflicting_files"]:
+                        # Skip .auto-claude files - they should never be merged
+                        if (
+                            file_path
+                            and file_path not in result["conflicting_files"]
+                            and not _is_auto_claude_file(file_path)
+                        ):
                             result["conflicting_files"].append(file_path)
 
             # Fallback: if we didn't parse conflicts, use diff to find files changed in both branches
@@ -578,8 +584,11 @@ def _check_git_conflicts(project_dir: Path, spec_name: str) -> dict:
                 )
 
                 # Files modified in both = potential conflicts
+                # Filter out .auto-claude files - they should never be merged
                 conflicting = main_files & spec_files
-                result["conflicting_files"] = list(conflicting)
+                result["conflicting_files"] = [
+                    f for f in conflicting if not _is_auto_claude_file(f)
+                ]
 
     except Exception as e:
         print(muted(f"  Error checking git conflicts: {e}"))
@@ -931,7 +940,9 @@ def _resolve_git_conflicts_with_ai(
     if lock_files_excluded:
         result["lock_files_excluded"] = lock_files_excluded
         print()
-        print(muted(f"  ℹ {len(lock_files_excluded)} lock file(s) excluded from merge:"))
+        print(
+            muted(f"  ℹ {len(lock_files_excluded)} lock file(s) excluded from merge:")
+        )
         for lock_file in lock_files_excluded:
             print(muted(f"    - {lock_file}"))
         print()

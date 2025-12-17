@@ -51,7 +51,8 @@ import type {
   ClaudeProfileSettings,
   ClaudeProfile,
   ClaudeAutoSwitchSettings,
-  ClaudeAuthResult
+  ClaudeAuthResult,
+  ClaudeUsageSnapshot
 } from './agent';
 import type { AppSettings, SourceEnvConfig, SourceEnvCheckResult, AutoBuildSourceUpdateCheck, AutoBuildSourceUpdateProgress } from './settings';
 import type {
@@ -164,6 +165,7 @@ export interface ElectronAPI {
   getTerminalSessionDates: (projectPath?: string) => Promise<IPCResult<SessionDateInfo[]>>;
   getTerminalSessionsForDate: (date: string, projectPath: string) => Promise<IPCResult<TerminalSession[]>>;
   restoreTerminalSessionsFromDate: (date: string, projectPath: string, cols?: number, rows?: number) => Promise<IPCResult<SessionDateRestoreResult>>;
+  saveTerminalBuffer: (terminalId: string, serialized: string) => Promise<void>;
 
   // Terminal event listeners
   onTerminalOutput: (callback: (id: string, data: string) => void) => () => void;
@@ -205,6 +207,19 @@ export interface ElectronAPI {
   onSDKRateLimit: (callback: (info: SDKRateLimitInfo) => void) => () => void;
   /** Retry a rate-limited operation with a different profile */
   retryWithProfile: (request: RetryWithProfileRequest) => Promise<IPCResult>;
+
+  // Usage Monitoring (Proactive Account Switching)
+  /** Request current usage snapshot */
+  requestUsageUpdate: () => Promise<IPCResult<ClaudeUsageSnapshot | null>>;
+  /** Listen for usage data updates */
+  onUsageUpdated: (callback: (usage: ClaudeUsageSnapshot) => void) => () => void;
+  /** Listen for proactive swap notifications */
+  onProactiveSwapNotification: (callback: (notification: {
+    fromProfile: { id: string; name: string };
+    toProfile: { id: string; name: string };
+    reason: string;
+    usageSnapshot: ClaudeUsageSnapshot;
+  }) => void) => () => void;
 
   // App settings
   getSettings: () => Promise<IPCResult<AppSettings>>;
@@ -391,6 +406,10 @@ export interface ElectronAPI {
     projectId: string,
     taskIds: string[]
   ) => Promise<IPCResult<{ version: string; reason: string }>>;
+  suggestChangelogVersionFromCommits: (
+    projectId: string,
+    commits: import('./changelog').GitCommit[]
+  ) => Promise<IPCResult<{ version: string; reason: string }>>;
 
   // Changelog git operations (for git-based changelog generation)
   getChangelogBranches: (projectId: string) => Promise<IPCResult<GitBranchInfo[]>>;
@@ -459,6 +478,11 @@ export interface ElectronAPI {
 
   // File explorer operations
   listDirectory: (dirPath: string) => Promise<IPCResult<FileNode[]>>;
+
+  // Git operations
+  getGitBranches: (projectPath: string) => Promise<IPCResult<string[]>>;
+  getCurrentGitBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
+  detectMainBranch: (projectPath: string) => Promise<IPCResult<string | null>>;
 }
 
 declare global {

@@ -28,7 +28,11 @@ export const DEFAULT_APP_SETTINGS = {
   globalClaudeOAuthToken: undefined as string | undefined,
   globalOpenAIApiKey: undefined as string | undefined,
   // Selected agent profile - defaults to 'balanced' for good speed/quality balance
-  selectedAgentProfile: 'balanced'
+  selectedAgentProfile: 'balanced',
+  // Changelog preferences (persisted between sessions)
+  changelogFormat: 'keep-a-changelog' as const,
+  changelogAudience: 'user-facing' as const,
+  changelogEmojiLevel: 'none' as const
 };
 
 // ============================================

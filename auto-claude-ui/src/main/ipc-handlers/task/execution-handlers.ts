@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { IPC_CHANNELS, AUTO_BUILD_PATHS, getSpecsDir } from '../../../shared/constants';
-import type { IPCResult, Task, TaskStartOptions, TaskStatus } from '../../../shared/types';
+import type { IPCResult, TaskStartOptions, TaskStatus } from '../../../shared/types';
 import path from 'path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { AgentManager } from '../../agent';
@@ -19,7 +19,7 @@ export function registerTaskExecutionHandlers(
    */
   ipcMain.on(
     IPC_CHANNELS.TASK_START,
-    (_, taskId: string, options?: TaskStartOptions) => {
+    (_, taskId: string, _options?: TaskStartOptions) => {
       console.log('[TASK_START] Received request for taskId:', taskId);
       const mainWindow = getMainWindow();
       if (!mainWindow) {
@@ -62,6 +62,9 @@ export function registerTaskExecutionHandlers(
 
       console.log('[TASK_START] hasSpec:', hasSpec, 'needsSpecCreation:', needsSpecCreation, 'needsImplementation:', needsImplementation);
 
+      // Get base branch from project settings for worktree creation
+      const baseBranch = project.settings?.mainBranch;
+
       if (needsSpecCreation) {
         // No spec file - need to run spec_runner.py to create the spec
         const taskDescription = task.description || task.title;
@@ -73,9 +76,9 @@ export function registerTaskExecutionHandlers(
       } else if (needsImplementation) {
         // Spec exists but no subtasks - run run.py to create implementation plan and execute
         // Read the spec.md to get the task description
-        let taskDescription = task.description || task.title;
+        const _taskDescription = task.description || task.title;
         try {
-          taskDescription = readFileSync(specFilePath, 'utf-8');
+          readFileSync(specFilePath, 'utf-8');
         } catch {
           // Use default description
         }
@@ -89,7 +92,8 @@ export function registerTaskExecutionHandlers(
           task.specId,
           {
             parallel: false,  // Sequential for planning phase
-            workers: 1
+            workers: 1,
+            baseBranch
           }
         );
       } else {
@@ -103,7 +107,8 @@ export function registerTaskExecutionHandlers(
           task.specId,
           {
             parallel: false,
-            workers: 1
+            workers: 1,
+            baseBranch
           }
         );
       }
@@ -211,6 +216,16 @@ export function registerTaskExecutionHandlers(
       taskId: string,
       status: TaskStatus
     ): Promise<IPCResult> => {
+      // Validate status transition - 'done' can only be set through merge handler
+      // This prevents AI agents from bypassing the human review workflow
+      if (status === 'done') {
+        console.warn(`[TASK_UPDATE_STATUS] Blocked attempt to set status 'done' directly for task ${taskId}. Use merge workflow instead.`);
+        return {
+          success: false,
+          error: "Cannot set status to 'done' directly. Complete the human review and merge the worktree changes instead."
+        };
+      }
+
       // Find task and project
       const { task, project } = findTaskAndProject(taskId);
 
@@ -237,8 +252,8 @@ export function registerTaskExecutionHandlers(
           // Store the exact UI status - project-store.ts will map it back
           plan.status = status;
           // Also store mapped version for Python compatibility
-          plan.planStatus = status === 'done' ? 'completed'
-            : status === 'in_progress' ? 'in_progress'
+          // Note: 'done' is blocked at the start of this handler - only set via merge workflow
+          plan.planStatus = status === 'in_progress' ? 'in_progress'
             : status === 'ai_review' ? 'review'
             : status === 'human_review' ? 'review'
             : 'pending';
@@ -247,14 +262,14 @@ export function registerTaskExecutionHandlers(
           writeFileSync(planPath, JSON.stringify(plan, null, 2));
         } else {
           // If no implementation plan exists yet, create a basic one
+          // Note: 'done' status is blocked at the start of this handler
           const plan = {
             feature: task.title,
             description: task.description || '',
             created_at: task.createdAt.toISOString(),
             updated_at: new Date().toISOString(),
             status: status, // Store exact UI status for persistence
-            planStatus: status === 'done' ? 'completed'
-              : status === 'in_progress' ? 'in_progress'
+            planStatus: status === 'in_progress' ? 'in_progress'
               : status === 'ai_review' ? 'review'
               : status === 'human_review' ? 'review'
               : 'pending',
@@ -500,16 +515,29 @@ export function registerTaskExecutionHandlers(
             const specDirForWatcher = path.join(project.path, specsBaseDir, task.specId);
             fileWatcher.watch(taskId, specDirForWatcher);
 
-            // Note: Parallel execution is handled internally by the agent
-            agentManager.startTaskExecution(
-              taskId,
-              project.path,
-              task.specId,
-              {
-                parallel: false,
-                workers: 1
-              }
-            );
+            // Check if spec.md exists to determine whether to run spec creation or task execution
+            const specFilePath = path.join(specDirForWatcher, AUTO_BUILD_PATHS.SPEC_FILE);
+            const hasSpec = existsSync(specFilePath);
+            const needsSpecCreation = !hasSpec;
+
+            if (needsSpecCreation) {
+              // No spec file - need to run spec_runner.py to create the spec
+              const taskDescription = task.description || task.title;
+              console.log(`[Recovery] Starting spec creation for: ${task.specId}`);
+              agentManager.startSpecCreation(task.specId, project.path, taskDescription, specDirForWatcher, task.metadata);
+            } else {
+              // Spec exists - run task execution
+              console.log(`[Recovery] Starting task execution for: ${task.specId}`);
+              agentManager.startTaskExecution(
+                taskId,
+                project.path,
+                task.specId,
+                {
+                  parallel: false,
+                  workers: 1
+                }
+              );
+            }
 
             autoRestarted = true;
             console.log(`[Recovery] Auto-restarted task ${taskId}`);

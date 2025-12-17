@@ -29,6 +29,8 @@ export interface ProjectSettings {
   graphitiMcpEnabled: boolean;
   /** Graphiti MCP server URL (default: http://localhost:8000/mcp/) */
   graphitiMcpUrl?: string;
+  /** Main branch name for worktree creation (default: auto-detected or 'main') */
+  mainBranch?: string;
   /**
    * Planning framework for this project.
    * Determines how tasks are organized and displayed.

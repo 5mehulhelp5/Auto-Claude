@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { v4 as uuid } from 'uuid';
 import type { TerminalSession } from '../../shared/types';
+import { terminalBufferManager } from '../lib/terminal-buffer-manager';
+import { debugLog, debugError } from '../../shared/utils/debug-logger';
 
 export type TerminalStatus = 'idle' | 'running' | 'claude-active' | 'exited';
 
@@ -12,7 +14,7 @@ export interface Terminal {
   createdAt: Date;
   isClaudeMode: boolean;
   claudeSessionId?: string;  // Claude Code session ID for resume
-  outputBuffer: string; // Store terminal output for replay on remount
+  // outputBuffer removed - now managed by terminalBufferManager singleton
   isRestored?: boolean;  // Whether this terminal was restored from a saved session
   associatedTaskId?: string;  // ID of task associated with this terminal (for context loading)
 }
@@ -73,7 +75,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       cwd: cwd || process.env.HOME || '~',
       createdAt: new Date(),
       isClaudeMode: false,
-      outputBuffer: '',
+      // outputBuffer removed - managed by terminalBufferManager
     };
 
     set((state) => ({
@@ -101,9 +103,14 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
       createdAt: new Date(session.createdAt),
       isClaudeMode: session.isClaudeMode,
       claudeSessionId: session.claudeSessionId,
-      outputBuffer: session.outputBuffer,
+      // outputBuffer now stored in terminalBufferManager
       isRestored: true,
     };
+
+    // Restore buffer to buffer manager
+    if (session.outputBuffer) {
+      terminalBufferManager.set(session.id, session.outputBuffer);
+    }
 
     set((state) => ({
       terminals: [...state.terminals, restoredTerminal],
@@ -114,6 +121,9 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   },
 
   removeTerminal: (id: string) => {
+    // Clean up buffer manager
+    terminalBufferManager.dispose(id);
+
     set((state) => {
       const newTerminals = state.terminals.filter((t) => t.id !== id);
       const newActiveId = state.activeTerminalId === id
@@ -173,26 +183,16 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
     }));
   },
 
+  // DEPRECATED: Use terminalBufferManager.append() directly
+  // Kept for backward compatibility, but does NOT trigger React re-renders
   appendOutput: (id: string, data: string) => {
-    set((state) => ({
-      terminals: state.terminals.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              // Limit buffer size to prevent memory issues (keep last 100KB)
-              outputBuffer: (t.outputBuffer + data).slice(-100000)
-            }
-          : t
-      ),
-    }));
+    terminalBufferManager.append(id, data);
+    // No React state update - this is the key performance improvement!
   },
 
+  // DEPRECATED: Use terminalBufferManager.clear() directly
   clearOutputBuffer: (id: string) => {
-    set((state) => ({
-      terminals: state.terminals.map((t) =>
-        t.id === id ? { ...t, outputBuffer: '' } : t
-      ),
-    }));
+    terminalBufferManager.clear(id);
   },
 
   clearAllTerminals: () => {
@@ -226,7 +226,7 @@ export async function restoreTerminalSessions(projectPath: string): Promise<void
 
   // Don't restore if we already have terminals (user might have opened some manually)
   if (store.terminals.length > 0) {
-    console.log('[TerminalStore] Terminals already exist, skipping session restore');
+    debugLog('[TerminalStore] Terminals already exist, skipping session restore');
     return;
   }
 
@@ -243,6 +243,6 @@ export async function restoreTerminalSessions(projectPath: string): Promise<void
 
     store.setHasRestoredSessions(true);
   } catch (error) {
-    console.error('[TerminalStore] Error restoring sessions:', error);
+    debugError('[TerminalStore] Error restoring sessions:', error);
   }
 }

@@ -35,6 +35,8 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { RateLimitModal } from './components/RateLimitModal';
 import { SDKRateLimitModal } from './components/SDKRateLimitModal';
 import { OnboardingWizard } from './components/onboarding';
+import { UsageIndicator } from './components/UsageIndicator';
+import { ProactiveSwapListener } from './components/ProactiveSwapListener';
 import { useProjectStore, loadProjects, addProject, initializeProject } from './stores/project-store';
 import { useTaskStore, loadTasks } from './stores/task-store';
 import { useSettingsStore, loadSettings } from './stores/settings-store';
@@ -114,12 +116,12 @@ export function App() {
 
   // Check if selected project needs initialization (e.g., .auto-claude folder was deleted)
   useEffect(() => {
-    if (selectedProject && !selectedProject.autoBuildPath && !showInitDialog && skippedInitProjectId !== selectedProject.id) {
+    if (selectedProject && !selectedProject.autoBuildPath && skippedInitProjectId !== selectedProject.id) {
       // Project exists but isn't initialized - show init dialog
       setPendingProject(selectedProject);
       setShowInitDialog(true);
     }
-  }, [selectedProject, showInitDialog, skippedInitProjectId]);
+  }, [selectedProject, skippedInitProjectId]);
 
   // Load tasks when project changes
   useEffect(() => {
@@ -252,6 +254,7 @@ export function App() {
   return (
     <TooltipProvider>
       <GlossaryProvider>
+      <ProactiveSwapListener />
       <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
@@ -275,7 +278,8 @@ export function App() {
               )}
             </div>
             {selectedProject && (
-              <div className="electron-no-drag">
+              <div className="electron-no-drag flex items-center gap-3">
+                <UsageIndicator />
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -399,8 +403,6 @@ export function App() {
         <Dialog open={showInitDialog} onOpenChange={(open) => {
           if (!open) {
             handleSkipInit();
-          } else {
-            setShowInitDialog(true);
           }
         }}>
           <DialogContent>
