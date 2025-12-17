@@ -1,3 +1,33 @@
+## 2.3.2 - UI Polish & Build Improvements
+
+### 🛠️ Improvements
+
+- Restructured SortableFeatureCard badge layout for improved visual presentation
+
+### 🐛 Bug Fixes
+
+- Fixed spec runner path configuration for more reliable task execution
+
+---
+
+## What's Changed
+
+- fix: fix to spec runner paths by @AndyMik90 in 9babdc2
+
+- feat: auto-claude: subtask-1-1 - Restructure SortableFeatureCard badge layout by @AndyMik90 in dc886dc
+
+## 2.3.1 - Linux Compatibility Fix
+
+### 🐛 Bug Fixes
+
+- Resolved path handling issues on Linux systems for improved cross-platform compatibility
+
+---
+
+## What's Changed
+
+- fix: Fix to linux path issue by @AndyMik90 in 3276034
+
 ## 2.3.0 - Terminal Session Persistence
 
 ### ✨ New Features
