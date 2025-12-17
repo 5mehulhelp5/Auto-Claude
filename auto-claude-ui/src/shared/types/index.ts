@@ -15,6 +15,8 @@ export * from './changelog';
 export * from './insights';
 export * from './roadmap';
 export * from './integrations';
+export * from './glossary';
+export * from './status';
 
 // IPC types (must be last to use types from other modules)
 export * from './ipc';

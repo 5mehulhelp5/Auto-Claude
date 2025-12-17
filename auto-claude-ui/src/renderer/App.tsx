@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Settings2, Download, RefreshCw, AlertCircle } from 'lucide-react';
 import { TooltipProvider } from './components/ui/tooltip';
+import { GlossaryProvider } from './contexts/GlossaryContext';
 import { Button } from './components/ui/button';
 import {
   Dialog,
@@ -250,6 +251,7 @@ export function App() {
 
   return (
     <TooltipProvider>
+      <GlossaryProvider>
       <div className="flex h-screen bg-background">
         {/* Sidebar */}
         <Sidebar
@@ -478,6 +480,7 @@ export function App() {
           }}
         />
       </div>
+      </GlossaryProvider>
     </TooltipProvider>
   );
 }

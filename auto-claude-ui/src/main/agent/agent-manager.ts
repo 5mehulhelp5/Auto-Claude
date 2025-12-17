@@ -51,16 +51,22 @@ export class AgentManager extends EventEmitter {
     specDir?: string,
     metadata?: SpecCreationMetadata
   ): void {
+    console.log('[AgentManager] startSpecCreation called for:', taskId);
+
     const autoBuildSource = this.processManager.getAutoBuildSourcePath();
+    console.log('[AgentManager] autoBuildSource:', autoBuildSource);
 
     if (!autoBuildSource) {
+      console.log('[AgentManager] ERROR: Auto-build source path not found');
       this.emit('error', taskId, 'Auto-build source path not found. Please configure it in App Settings.');
       return;
     }
 
-    const specRunnerPath = path.join(autoBuildSource, 'spec_runner.py');
+    const specRunnerPath = path.join(autoBuildSource, 'runners', 'spec_runner.py');
+    console.log('[AgentManager] specRunnerPath:', specRunnerPath, 'exists:', existsSync(specRunnerPath));
 
     if (!existsSync(specRunnerPath)) {
+      console.log('[AgentManager] ERROR: Spec runner not found at:', specRunnerPath);
       this.emit('error', taskId, `Spec runner not found at: ${specRunnerPath}`);
       return;
     }
@@ -82,6 +88,7 @@ export class AgentManager extends EventEmitter {
       args.push('--auto-approve');
     }
 
+    console.log('[AgentManager] Spawning spec_runner with args:', args);
     // Note: This is spec-creation but it chains to task-execution via run.py
     this.processManager.spawnProcess(taskId, autoBuildSource, args, combinedEnv, 'task-execution');
   }

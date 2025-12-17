@@ -25,8 +25,10 @@ import { Label } from './ui/label';
 import { TaskCard } from './TaskCard';
 import { SortableTaskCard } from './SortableTaskCard';
 import { TASK_STATUS_COLUMNS, TASK_STATUS_LABELS } from '../../shared/constants';
+import { pluralize } from '../../shared/utils/pluralize';
 import { cn } from '../lib/utils';
 import { persistTaskStatus } from '../stores/task-store';
+import { useGlossary } from '../contexts/GlossaryContext';
 import type { Task, TaskStatus } from '../../shared/types';
 
 interface KanbanBoardProps {
@@ -41,6 +43,7 @@ interface DroppableColumnProps {
   onTaskClick: (task: Task) => void;
   isOver: boolean;
   onAddClick?: () => void;
+  taskTermSingular: string;  // Glossary term for "task" (e.g., "Story" or "Subtask")
 }
 
 // Empty state content for each column
@@ -84,12 +87,13 @@ const getEmptyStateContent = (status: TaskStatus): { icon: React.ReactNode; mess
   }
 };
 
-function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick }: DroppableColumnProps) {
+function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick, taskTermSingular }: DroppableColumnProps) {
   const { setNodeRef } = useDroppable({
     id: status
   });
 
   const taskIds = tasks.map((t) => t.id);
+  const countLabel = `${tasks.length} ${pluralize(taskTermSingular, tasks.length)}`;
 
   const getColumnBorderColor = (): string => {
     switch (status) {
@@ -126,7 +130,7 @@ function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick }: Dro
           <h2 className="font-semibold text-sm text-foreground">
             {TASK_STATUS_LABELS[status]}
           </h2>
-          <span className="column-count-badge">
+          <span className="column-count-badge" title={countLabel}>
             {tasks.length}
           </span>
         </div>
@@ -196,6 +200,7 @@ function DroppableColumn({ status, tasks, onTaskClick, isOver, onAddClick }: Dro
 }
 
 export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick }: KanbanBoardProps) {
+  const glossary = useGlossary();
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [overColumnId, setOverColumnId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
@@ -348,6 +353,7 @@ export function KanbanBoard({ tasks, onTaskClick, onNewTaskClick }: KanbanBoardP
               onTaskClick={onTaskClick}
               isOver={overColumnId === status}
               onAddClick={status === 'backlog' ? onNewTaskClick : undefined}
+              taskTermSingular={glossary.task}
             />
           ))}
         </div>
