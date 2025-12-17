@@ -1,3 +1,31 @@
+## 2.3.0 - Terminal Session Persistence
+
+### ✨ New Features
+
+- PTY Daemon and Buffer Management system for improved terminal handling
+
+- Release title support for GitHub changelog functionality
+
+- BMAD framework integration adapter infrastructure with unified data models
+
+### 🛠️ Improvements
+
+- Terminal session persistence across app restarts for seamless workflow continuity
+
+### 🐛 Bug Fixes
+
+- Prevent tasks from bypassing human review when marked as complete
+
+---
+
+## What's Changed
+
+- feat: Implement PTY Daemon and Buffer Management by @AndyMik90 in 9985051
+- feat: Added a release title for the github format - changelog functionality by @AndyMik90 in 5078191
+- feat: Add BMAD integration adapter infrastructure and unified data models by @AndyMik90 in eeb0a03
+- improvement: Terminal session persistence over app restart by @AndyMik90 in 395ba60
+- fix: dont let tasks slip by human review if the task was set as done by @AndyMik90 in 43a593c
+
 ## 2.2.0 - 2025-12-17
 
 ### ✨ New Features
