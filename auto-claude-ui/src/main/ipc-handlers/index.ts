@@ -28,6 +28,7 @@ import { registerChangelogHandlers } from './changelog-handlers';
 import { registerInsightsHandlers } from './insights-handlers';
 import { registerDockerHandlers } from './docker-handlers';
 import { registerBMADHandlers } from './bmad-handlers';
+import { registerAppUpdateHandlers } from './app-update-handlers';
 import { notificationService } from '../notification-service';
 
 /**
@@ -98,6 +99,9 @@ export function setupIpcHandlers(
   // BMAD Method installation handlers
   registerBMADHandlers();
 
+  // App auto-update handlers
+  registerAppUpdateHandlers();
+
   console.log('[IPC] All handler modules registered successfully');
 }
 
@@ -119,5 +123,6 @@ export {
   registerChangelogHandlers,
   registerInsightsHandlers,
   registerDockerHandlers,
-  registerBMADHandlers
+  registerBMADHandlers,
+  registerAppUpdateHandlers
 };
