@@ -147,6 +147,13 @@ Examples:
         action="store_true",
         help="Skip human review checkpoint and automatically approve spec for building",
     )
+    parser.add_argument(
+        "--framework",
+        type=str,
+        choices=["bmad", "native"],
+        default="bmad",
+        help="Planning framework to use: 'bmad' (BMAD Method) or 'native' (Auto Claude native). Default: bmad",
+    )
 
     args = parser.parse_args()
 
@@ -192,6 +199,37 @@ Examples:
             f"\n{icon(Icons.GEAR)} Note: --dev flag is deprecated. All specs now go to .auto-claude/specs/\n"
         )
 
+    # Route based on framework selection
+    if args.framework == "bmad":
+        # Use BMAD planning workflows
+        from bmad_task_integration import run_bmad_planning
+
+        try:
+            spec_dir = asyncio.run(
+                run_bmad_planning(
+                    project_dir=project_dir,
+                    task_description=task_description,
+                    spec_dir=args.spec_dir,
+                    model=args.model,
+                    auto_approve=args.auto_approve,
+                    no_build=args.no_build,
+                )
+            )
+
+            # If not starting build, exit successfully
+            if args.no_build:
+                print()
+                print_status(f"BMAD planning complete: {spec_dir}", "success")
+                print()
+                sys.exit(0)
+
+            # Otherwise the run_bmad_planning function will chain to run.py
+
+        except Exception as e:
+            print(f"\n{icon(Icons.ERROR)} BMAD planning failed: {e}")
+            sys.exit(1)
+
+    # Use native Auto Claude spec creation
     orchestrator = SpecOrchestrator(
         project_dir=project_dir,
         task_description=task_description,

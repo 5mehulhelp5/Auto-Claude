@@ -70,9 +70,16 @@ export function registerTaskExecutionHandlers(
         const taskDescription = task.description || task.title;
         console.log('[TASK_START] Starting spec creation for:', task.specId, 'in:', specDir);
 
+        // Get framework from project settings (default to 'bmad')
+        const framework = project.settings?.framework || 'bmad';
+        console.log('[TASK_START] Using framework:', framework);
+
         // Start spec creation process - pass the existing spec directory
         // so spec_runner uses it instead of creating a new one
-        agentManager.startSpecCreation(task.specId, project.path, taskDescription, specDir, task.metadata);
+        agentManager.startSpecCreation(task.specId, project.path, taskDescription, specDir, {
+          ...task.metadata,
+          framework  // Pass framework to backend
+        });
       } else if (needsImplementation) {
         // Spec exists but no subtasks - run run.py to create implementation plan and execute
         // Read the spec.md to get the task description
@@ -82,6 +89,9 @@ export function registerTaskExecutionHandlers(
         } catch {
           // Use default description
         }
+
+        // Get framework from project settings (default to 'bmad')
+        const framework = project.settings?.framework || 'bmad';
 
         console.log('[TASK_START] Starting task execution (no subtasks) for:', task.specId);
         // Start task execution which will create the implementation plan
@@ -93,13 +103,17 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,  // Sequential for planning phase
             workers: 1,
-            baseBranch
+            baseBranch,
+            framework  // Pass framework to backend
           }
         );
       } else {
         // Task has subtasks, start normal execution
         // Note: Parallel execution is handled internally by the agent, not via CLI flags
         console.log('[TASK_START] Starting task execution (has subtasks) for:', task.specId);
+
+        // Get framework from project settings (default to 'bmad')
+        const framework = project.settings?.framework || 'bmad';
 
         agentManager.startTaskExecution(
           taskId,
@@ -108,7 +122,8 @@ export function registerTaskExecutionHandlers(
           {
             parallel: false,
             workers: 1,
-            baseBranch
+            baseBranch,
+            framework  // Pass framework to backend
           }
         );
       }

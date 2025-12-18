@@ -41,10 +41,12 @@ export interface TaskExecutionOptions {
   parallel?: boolean;
   workers?: number;
   baseBranch?: string;
+  framework?: 'bmad' | 'native';
 }
 
 export interface SpecCreationMetadata {
   requireReviewBeforeCoding?: boolean;
+  framework?: 'bmad' | 'native';
 }
 
 export interface IdeationProgressData {

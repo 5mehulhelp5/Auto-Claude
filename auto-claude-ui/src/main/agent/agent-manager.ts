@@ -132,6 +132,10 @@ export class AgentManager extends EventEmitter {
       args.push('--auto-approve');
     }
 
+    // Pass framework if specified (default to 'bmad')
+    const framework = metadata?.framework || 'bmad';
+    args.push('--framework', framework);
+
     // Store context for potential restart
     this.storeTaskContext(taskId, projectPath, '', {}, true, taskDescription, specDir, metadata);
 
@@ -183,6 +187,10 @@ export class AgentManager extends EventEmitter {
     if (options.baseBranch) {
       args.push('--base-branch', options.baseBranch);
     }
+
+    // Pass framework if specified (default to 'bmad')
+    const framework = options.framework || 'bmad';
+    args.push('--framework', framework);
 
     // Note: --parallel was removed from run.py CLI - parallel execution is handled internally by the agent
     // The options.parallel and options.workers are kept for future use or logging purposes
